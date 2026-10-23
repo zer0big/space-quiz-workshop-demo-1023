@@ -390,9 +390,19 @@
       const screen = document.querySelector("#screen");
       const scoreDisplay = document.querySelector("#score");
       const announcement = document.querySelector("#announcement");
+      let order = questions;
       let current = 0;
       let score = 0;
       let locked = false;
+
+      function shuffle(items) {
+        const copy = [...items];
+        for (let i = copy.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [copy[i], copy[j]] = [copy[j], copy[i]];
+        }
+        return copy;
+      }
 
       function renderIntro() {
         screen.innerHTML = `
@@ -406,6 +416,7 @@
       }
 
       function startQuiz() {
+        order = shuffle(questions);
         current = 0;
         score = 0;
         scoreDisplay.textContent = score;
@@ -414,7 +425,7 @@
 
       function renderQuestion() {
         locked = false;
-        const item = questions[current];
+        const item = order[current];
         const letters = ["A", "B", "C", "D"];
         screen.innerHTML = `
           <div class="card-content">
@@ -448,7 +459,7 @@
       function selectAnswer(selected, selectedButton) {
         if (locked) return;
         locked = true;
-        const item = questions[current];
+        const item = order[current];
         const correct = selected === item.answer;
         const buttons = [...screen.querySelectorAll(".answer")];
         buttons.forEach(button => { button.disabled = true; });
