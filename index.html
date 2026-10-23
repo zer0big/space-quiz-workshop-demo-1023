@@ -157,7 +157,7 @@
       line-height: 1.75;
     }
 
-    .start-button, .next-button, .restart-button {
+    .start-button, .next-button, .restart-button, .copy-button {
       min-height: 50px;
       padding: 0 22px;
       border: 0;
@@ -169,15 +169,15 @@
       transition: transform .18s ease, filter .18s ease;
     }
 
-    .start-button:hover, .next-button:hover, .restart-button:hover {
+    .start-button:hover, .next-button:hover, .restart-button:hover, .copy-button:hover {
       transform: translateY(-2px);
       filter: brightness(1.08);
     }
 
-    .start-button:active, .next-button:active, .restart-button:active { transform: translateY(0); }
+    .start-button:active, .next-button:active, .restart-button:active, .copy-button:active { transform: translateY(0); }
 
     .start-button:focus-visible, .next-button:focus-visible, .restart-button:focus-visible,
-    .answer:focus-visible {
+    .answer:focus-visible, .copy-button:focus-visible, .report-text:focus-visible {
       outline: 3px solid var(--accent);
       outline-offset: 4px;
     }
@@ -314,6 +314,31 @@
 
     .result .restart-button { margin-top: 6px; }
 
+    .mission-report {
+      margin: 24px 0;
+      padding: 20px;
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      background: var(--surface-soft);
+      overflow-wrap: anywhere;
+    }
+
+    .mission-report h3 { margin: 0 0 12px; }
+    .mission-report .final-score { margin-bottom: 12px; }
+    .result-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 12px; }
+    .result-actions .restart-button { margin-top: 0; }
+    .report-text {
+      width: 100%;
+      min-height: 120px;
+      margin-top: 12px;
+      padding: 12px;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      color: var(--text);
+      background: var(--surface);
+      font: inherit;
+    }
+
     .sr-only {
       position: absolute;
       width: 1px;
@@ -394,6 +419,8 @@
       let current = 0;
       let score = 0;
       let locked = false;
+      let questionStartedAt = 0;
+      let answerTimes = [];
 
       function shuffle(items) {
         const copy = [...items];
@@ -419,6 +446,7 @@
         order = shuffle(questions);
         current = 0;
         score = 0;
+        answerTimes = [];
         scoreDisplay.textContent = score;
         renderQuestion();
       }
@@ -454,11 +482,13 @@
         });
         screen.querySelector("#next").addEventListener("click", nextQuestion);
         screen.querySelector('[data-answer="0"]').focus();
+        questionStartedAt = performance.now();
       }
 
       function selectAnswer(selected, selectedButton) {
         if (locked) return;
         locked = true;
+        answerTimes[current] = performance.now() - questionStartedAt;
         const item = order[current];
         const correct = selected === item.answer;
         const buttons = [...screen.querySelectorAll(".answer")];
@@ -493,25 +523,65 @@
       }
 
       function renderResult() {
-        const result = score === questions.length
+        const accuracy = (score / questions.length) * 100;
+        const result = accuracy === 100
           ? { emoji: "🏆", title: "우주 박사 탄생!", text: "완벽한 탐사였어요! 우주에 대해 정말 많이 알고 있네요." }
-          : score >= 7
+          : accuracy >= 70
             ? { emoji: "🌟", title: "멋진 우주 탐험가!", text: "놀라운 실력이에요. 우주 탐사를 훌륭하게 마쳤어요!" }
-            : score >= 4
+            : accuracy >= 40
               ? { emoji: "🪐", title: "반짝이는 발견!", text: "좋은 출발이에요! 더 알아갈수록 우주가 더 재미있어질 거예요." }
               : { emoji: "🚀", title: "첫 탐사 완료!", text: "모험을 시작한 것만으로도 멋져요. 다시 도전해 더 많은 별을 찾아봐요!" };
+        const longestIndex = answerTimes.reduce((longest, time, index) =>
+          time > answerTimes[longest] ? index : longest, 0);
+        const longestQuestion = `${longestIndex + 1}번 · ${order[longestIndex].question} (${(answerTimes[longestIndex] / 1000).toFixed(1)}초)`;
+        const report = `🚀 우주 퀴즈 미션 리포트\n점수: ${score}/${questions.length} · 정답률: ${Math.round(accuracy)}%\n등급: ${result.title}\n가장 오래 걸린 문항: ${longestQuestion}`;
         screen.innerHTML = `
           <div class="card-content result" aria-labelledby="screen-title">
             <span class="result-emoji" aria-hidden="true">${result.emoji}</span>
             <p class="eyebrow">MISSION COMPLETE</p>
             <h2 id="screen-title" tabindex="-1">${result.title}</h2>
             <p class="result-copy">${result.text}</p>
-            <p class="final-score"><span id="final-score-count" aria-hidden="true">0</span><span class="sr-only">${score}점</span><span aria-hidden="true"> / ${questions.length}</span></p>
+            <section class="mission-report" aria-labelledby="report-title">
+              <h3 id="report-title">미션 리포트</h3>
+              <p class="final-score"><span id="final-score-count" aria-hidden="true">0</span><span class="sr-only">${questions.length}문제 중 ${score}점</span><span aria-hidden="true"> / ${questions.length}</span></p>
+              <p class="result-copy">정답률 ${Math.round(accuracy)}% · 등급: ${result.title}</p>
+              <p class="result-copy">가장 오래 걸린 문항: ${longestQuestion}</p>
+              <p class="result-copy">문항 표시부터 답 선택까지 측정 · 같은 시간이면 먼저 푼 문항</p>
+            </section>
             <p class="result-copy">맞힌 문제 ${score}개 · 다시 탐사하고 싶다면 언제든 출발!</p>
-            <button class="restart-button" id="restart" type="button">다시 도전하기 <span aria-hidden="true">↻</span></button>
+            <div class="result-actions">
+              <button class="copy-button" id="copy-report" type="button">미션 리포트 복사</button>
+              <button class="restart-button" id="restart" type="button">다시 도전하기 <span aria-hidden="true">↻</span></button>
+            </div>
+            <p class="feedback" id="copy-status" role="status" aria-atomic="true"></p>
+            <textarea class="report-text" id="report-text" aria-label="복사할 미션 리포트" readonly hidden></textarea>
           </div>`;
         announcement.textContent = `퀴즈 완료. ${questions.length}문제 중 ${score}문제를 맞혔습니다. ${result.title}`;
         document.querySelector("#restart").addEventListener("click", startQuiz);
+        const copyButton = screen.querySelector("#copy-report");
+        const copyStatus = screen.querySelector("#copy-status");
+        const reportText = screen.querySelector("#report-text");
+        reportText.value = report;
+        copyButton.addEventListener("click", async () => {
+          copyStatus.textContent = "";
+          try {
+            await navigator.clipboard.writeText(report);
+            if (copyButton.isConnected) copyStatus.textContent = "미션 리포트를 복사했어요!";
+          } catch {
+            if (!copyButton.isConnected) return;
+            reportText.hidden = false;
+            reportText.focus();
+            reportText.select();
+            try {
+              if (!document.execCommand("copy")) throw new Error("Copy unavailable");
+              reportText.hidden = true;
+              copyButton.focus();
+              copyStatus.textContent = "미션 리포트를 복사했어요!";
+            } catch {
+              copyStatus.textContent = "자동 복사가 제한되어 있어요. 선택된 리포트를 Ctrl+C(맥: Command+C)로 복사해 주세요.";
+            }
+          }
+        });
         screen.querySelector("#screen-title").focus();
         animateFinalScore(screen.querySelector("#final-score-count"), score);
       }
